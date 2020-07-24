@@ -13,20 +13,15 @@ const { RPC } = require('./message')
  */
 class Peer extends EventEmitter {
   /**
-   * @param {PeerId} id
-   * @param {Array<string>} protocols
+   * @param {PeerInfo} info
    */
-  constructor ({ id, protocols }) {
+  constructor (info) {
     super()
 
     /**
-     * @type {PeerId}
+     * @type {PeerInfo}
      */
-    this.id = id
-    /**
-     * @type {string}
-     */
-    this.protocols = protocols
+    this.info = info
     /**
      * @type {Connection}
      */
@@ -70,7 +65,7 @@ class Peer extends EventEmitter {
    */
   write (msg) {
     if (!this.isWritable) {
-      const id = this.id.toB58String()
+      const id = this.info.id.toB58String()
       throw new Error('No writable connection to ' + id)
     }
 
@@ -87,6 +82,8 @@ class Peer extends EventEmitter {
     this.conn = conn
     this.stream = pushable({
       onEnd: () => {
+        // close readable side of the stream
+        this.conn.reset && this.conn.reset()
         this.conn = null
         this.stream = null
         this.emit('close')

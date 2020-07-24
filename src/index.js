@@ -4,7 +4,7 @@ const debug = require('debug')
 const EventEmitter = require('events')
 const errcode = require('err-code')
 
-const PeerId = require('peer-id')
+const PeerInfo = require('peer-info')
 const MulticodecTopology = require('libp2p-interfaces/src/topology/multicodec-topology')
 
 const message = require('./message')
@@ -42,7 +42,7 @@ class PubsubBaseProtocol extends EventEmitter {
    * @param {Object} props
    * @param {String} props.debugName log namespace
    * @param {Array<string>|string} props.multicodecs protocol identificers to connect
-   * @param {PeerId} props.peerId peer's peerId
+   * @param {PeerInfo} props.peerInfo peer's peerInfo
    * @param {Object} props.registrar registrar for libp2p protocols
    * @param {function} props.registrar.handle
    * @param {function} props.registrar.register
@@ -54,7 +54,7 @@ class PubsubBaseProtocol extends EventEmitter {
   constructor ({
     debugName,
     multicodecs,
-    peerId,
+    peerInfo,
     registrar,
     signMessages = true,
     strictSigning = true
@@ -67,8 +67,8 @@ class PubsubBaseProtocol extends EventEmitter {
       throw new Error('multicodecs are required')
     }
 
-    if (!PeerId.isPeerId(peerId)) {
-      throw new Error('peerId must be an instance of `peer-id`')
+    if (!PeerInfo.isPeerInfo(peerInfo)) {
+      throw new Error('peer info must be an instance of `peer-info`')
     }
 
     validateRegistrar(registrar)
@@ -79,11 +79,10 @@ class PubsubBaseProtocol extends EventEmitter {
     this.log.err = debug(`${debugName}:error`)
 
     this.multicodecs = utils.ensureArray(multicodecs)
+    this.peerInfo = peerInfo
     this.registrar = registrar
 
     this.started = false
-
-    this.peerId = peerId
 
     /**
      * Map of topics to which peers are subscribed to
@@ -100,7 +99,9 @@ class PubsubBaseProtocol extends EventEmitter {
     this.peers = new Map()
 
     // Message signing
-    this.signMessages = signMessages
+    if (signMessages) {
+      this.peerId = this.peerInfo.id
+    }
 
     /**
      * If message signing should be required for incoming messages
@@ -169,38 +170,36 @@ class PubsubBaseProtocol extends EventEmitter {
    * @param {DuplexStream} props.strean
    * @param {Connection} props.connection connection
    */
-  _onIncomingStream ({ protocol, stream, connection }) {
-    const peerId = connection.remotePeer
-    const idB58Str = peerId.toB58String()
+  async _onIncomingStream ({ protocol, stream, connection }) {
+    const peerInfo = await PeerInfo.create(connection.remotePeer)
+    peerInfo.protocols.add(protocol)
 
-    const peer = this._addPeer(new Peer({
-      id: peerId,
-      protocols: [protocol]
-    }))
+    const idB58Str = peerInfo.id.toB58String()
 
-    peer.attachConnection(stream)
+    const peer = this._addPeer(peerInfo)
+
     this._processMessages(idB58Str, stream, peer)
   }
 
   /**
    * Registrar notifies a connection successfully with pubsub protocol.
    * @private
-   * @param {PeerId} peerId remote peer-id
+   * @param {PeerInfo} peerInfo remote peer info
    * @param {Connection} conn connection to the peer
    */
-  async _onPeerConnected (peerId, conn) {
-    const idB58Str = peerId.toB58String()
+  async _onPeerConnected (peerInfo, conn) {
+    const idB58Str = peerInfo.id.toB58String()
     this.log('connected', idB58Str)
 
-    const peer = this._addPeer(new Peer({
-      id: peerId,
-      protocols: this.multicodecs
-    }))
+    const peer = this._addPeer(peerInfo)
+
+    if (peer.isConnected) {
+      return
+    }
 
     try {
       const { stream } = await conn.newStream(this.multicodecs)
       peer.attachConnection(stream)
-      this._processMessages(idB58Str, stream, peer)
     } catch (err) {
       this.log.err(err)
     }
@@ -209,11 +208,11 @@ class PubsubBaseProtocol extends EventEmitter {
   /**
    * Registrar notifies a closing connection with pubsub protocol.
    * @private
-   * @param {PeerId} peerId peerId
+   * @param {PeerInfo} peerInfo peer info
    * @param {Error} err error for connection end
    */
-  _onPeerDisconnected (peerId, err) {
-    const idB58Str = peerId.toB58String()
+  _onPeerDisconnected (peerInfo, err) {
+    const idB58Str = peerInfo.id.toB58String()
     const peer = this.peers.get(idB58Str)
 
     this.log('connection ended', idB58Str, err ? err.message : '')
@@ -223,15 +222,18 @@ class PubsubBaseProtocol extends EventEmitter {
   /**
    * Add a new connected peer to the peers map.
    * @private
-   * @param {Peer} peer internal peer
-   * @returns {Peer}
+   * @param {PeerInfo} peerInfo peer info
+   * @returns {PeerInfo}
    */
-  _addPeer (peer) {
-    const id = peer.id.toB58String()
+  _addPeer (peerInfo) {
+    const id = peerInfo.id.toB58String()
     let existing = this.peers.get(id)
 
     if (!existing) {
       this.log('new peer', id)
+
+      const peer = new Peer(peerInfo)
+
       this.peers.set(id, peer)
       existing = peer
 
@@ -246,11 +248,11 @@ class PubsubBaseProtocol extends EventEmitter {
    * Remove a peer from the peers map.
    * @private
    * @param {Peer} peer peer state
-   * @returns {Peer}
+   * @returns {PeerInfo}
    */
   _removePeer (peer) {
     if (!peer) return
-    const id = peer.id.toB58String()
+    const id = peer.info.id.toB58String()
 
     this.log('remove', id, peer._references)
 
@@ -291,7 +293,7 @@ class PubsubBaseProtocol extends EventEmitter {
    */
   _buildMessage (message) {
     const msg = utils.normalizeOutRpcMessage(message)
-    if (this.signMessages) {
+    if (this.peerId) {
       return signMessage(this.peerId, msg)
     } else {
       return message
@@ -314,7 +316,7 @@ class PubsubBaseProtocol extends EventEmitter {
 
     return Array.from(this.peers.values())
       .filter((peer) => peer.topics.has(topic))
-      .map((peer) => peer.id.toB58String())
+      .map((peer) => peer.info.id.toB58String())
   }
 
   /**
