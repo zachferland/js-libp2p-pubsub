@@ -216,6 +216,7 @@ class PubsubBaseProtocol extends EventEmitter {
     const peer = this.peers.get(idB58Str)
 
     this.log('connection ended', idB58Str, err ? err.message : '')
+    console.log('A peer disconnected!')
     this._removePeer(peer)
   }
 
@@ -237,7 +238,10 @@ class PubsubBaseProtocol extends EventEmitter {
       this.peers.set(id, peer)
       existing = peer
 
-      peer.once('close', () => this._removePeer(peer))
+      peer.once('close', () => {
+        console.log('peer close!')
+        return this._removePeer(peer)
+      })
     }
     ++existing._references
 
@@ -253,12 +257,14 @@ class PubsubBaseProtocol extends EventEmitter {
   _removePeer (peer) {
     if (!peer) return
     const id = peer.info.id.toB58String()
-
+    console.log('remove', id, peer._references)
     this.log('remove', id, peer._references)
 
     // Only delete when no one else is referencing this peer.
+    console.log('peer refrences', --peer._references === 0)
     if (--peer._references === 0) {
       this.log('delete peer', id)
+      console.log('delete peer')
       this.peers.delete(id)
     }
 
