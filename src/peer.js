@@ -169,8 +169,7 @@ class Peer extends EventEmitter {
    */
   close () {
     // Force removal of peer
-    // TODO should this not be 0!!!!!
-    // this._references = 1
+    this._references = 1
 
     // End the pushable
     if (this.stream) {
