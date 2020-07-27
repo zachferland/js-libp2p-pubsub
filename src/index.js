@@ -255,12 +255,13 @@ class PubsubBaseProtocol extends EventEmitter {
     const id = peer.info.id.toB58String()
 
     this.log('remove', id, peer._references)
+    console.log('removing peer', id, peer._references)
 
     // Only delete when no one else is referencing this peer.
-    if (--peer._references === 0) {
+    // if (--peer._references === 0) {
       this.log('delete peer', id)
       this.peers.delete(id)
-    }
+    // }
 
     return peer
   }
