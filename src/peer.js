@@ -104,9 +104,11 @@ class Peer extends EventEmitter {
       this.stream,
       lp.encode(),
       conn
-    ).catch(err => {
-      log.error(err)
-    })
+    )
+    // TODO maybe this the closing
+    // .catch(err => {
+    //   log.error(err)
+    // })
 
     // Only emit if the connection is new
     if (!_prevStream) {
