@@ -100,15 +100,22 @@ class Peer extends EventEmitter {
     })
     this.conn = conn
 
-    pipe(
+    const piped = pipe(
       this.stream,
       lp.encode(),
       conn
     )
-    // TODO maybe this the closing
-    // .catch(err => {
-    //   log.error(err)
-    // })
+
+     if (piped == null) {
+       console.log('piped null?????')
+       return
+     }
+
+     piped.catch(err => {
+       console.log('piped error')
+       console.log(error)
+       log.error(err)
+     })
 
     // Only emit if the connection is new
     if (!_prevStream) {
