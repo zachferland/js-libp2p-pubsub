@@ -90,6 +90,10 @@ class Peer extends EventEmitter {
       }
     })
 
+    if (this.stream == null ) console.log('stjream null')
+    if (lp.encode() == null ) console.log('encode null')
+    if (conn == null ) console.log('conn null')
+
     const piped = pipe(
       this.stream,
       lp.encode(),
