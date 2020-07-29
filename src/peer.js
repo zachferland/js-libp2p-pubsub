@@ -94,6 +94,7 @@ class Peer extends EventEmitter {
         this.conn = null
         this.stream = null
         if (emit !== false) {
+          console.log('emit close')
           this.emit('close')
         }
       }
@@ -107,7 +108,7 @@ class Peer extends EventEmitter {
     )
 
      if (piped == null) {
-       console.log('piped null?????')
+       // console.log('piped null?????')
        return
      }
 

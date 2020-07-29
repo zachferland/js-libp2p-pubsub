@@ -212,6 +212,7 @@ class PubsubBaseProtocol extends EventEmitter {
     const peer = this.peers.get(idB58Str)
 
     this.log('connection ended', idB58Str, err ? err.message : '')
+    console.log('connection end')
     this._removePeer(peer)
   }
 
@@ -250,6 +251,7 @@ class PubsubBaseProtocol extends EventEmitter {
     const id = peer.info.id.toB58String()
 
     this.log('delete peer', id)
+    console.log('delete peer', id)
     this.peers.delete(id)
 
     return peer
