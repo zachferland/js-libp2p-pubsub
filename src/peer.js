@@ -90,11 +90,19 @@ class Peer extends EventEmitter {
       }
     })
 
-    pipe(
+    const piped = pipe(
       this.stream,
       lp.encode(),
       conn
     )
+
+    if (piped == null) {
+      return
+    }
+
+    piped.catch(err => {
+      log.error(err)
+    })
 
     this.emit('connection')
   }
