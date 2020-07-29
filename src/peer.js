@@ -97,6 +97,7 @@ class Peer extends EventEmitter {
     )
 
     if (piped == null) {
+      console.log('piped null!!!')
       return
     }
 
